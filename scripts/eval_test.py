@@ -53,7 +53,9 @@ def evaluate_models():
     for model_tag in models:
         cand_paths = [
             REPO_ROOT / "runs" / "segment" / model_tag / "weights" / "best.pt",
+            REPO_ROOT / "runs" / "segment" / "runs" / "segment" / model_tag / "weights" / "best.pt",
             Path(f"runs/segment/{model_tag}/weights/best.pt"),
+            Path(f"runs/segment/runs/segment/{model_tag}/weights/best.pt"),
             REPO_ROOT / "backup" / model_tag / "best.pt",
             Path(f"backup/{model_tag}/best.pt"),
         ]
@@ -64,8 +66,15 @@ def evaluate_models():
                 break
 
         if not best_pt:
+            for p in REPO_ROOT.rglob("best.pt"):
+                if model_tag in str(p):
+                    best_pt = p
+                    break
+
+        if not best_pt:
             print(f" Checkpoint not found for {model_tag}. Skipping.")
             continue
+
 
         file_size_mb = best_pt.stat().st_size / (1024 * 1024)
         print(f"\n Evaluating {model_tag} ({best_pt})...")

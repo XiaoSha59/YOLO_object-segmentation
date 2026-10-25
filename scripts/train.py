@@ -201,10 +201,12 @@ def main():
         if args.resume and last_ckpt.exists():
             print(f" Resuming interrupted training from: {last_ckpt}")
             model = YOLO(str(last_ckpt))
-            model.train(resume=True)
+            results = model.train(resume=True)
+            run_dir = Path(results.save_dir) if hasattr(results, "save_dir") else Path(run_project) / tag
+            backup_model_run(run_dir, tag)
         else:
             model = YOLO(weight_name)
-            model.train(
+            results = model.train(
                 data=data_yaml_path,
                 epochs=cfg["epochs"],
                 patience=cfg.get("patience", 30),
@@ -224,9 +226,9 @@ def main():
                 name=tag,
                 exist_ok=True,
             )
+            run_dir = Path(results.save_dir) if hasattr(results, "save_dir") else Path(run_project) / tag
+            backup_model_run(run_dir, tag)
 
-        run_dir = Path(run_project) / tag
-        backup_model_run(run_dir, tag)
 
     print("\n ALL MODELS COMPLETED SUCCESSFULLY!")
 
