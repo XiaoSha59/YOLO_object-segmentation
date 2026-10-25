@@ -1,195 +1,162 @@
 #!/usr/bin/env python3
 """
 scripts/train.py
-Trains YOLO26-seg models (n, s, m) with modular CLI controls:
-- Train individually (--model yolo26n / yolo26s / yolo26m) or all models sequentially.
-- Resume interrupted training runs (--resume).
-- Verify GPU VRAM with a 1-epoch smoke test (--smoke).
-- Automatically backs up and zips best.pt, last.pt, and logs to backup/<model_name>/.
+Trains YOLO26-seg models (yolo26n-seg, yolo26s-seg, yolo26m-seg) on Package-Seg.
+Provides modular CLI options: --smoke-test, --model, --resume, and automated backup.zip archiving.
 """
 
 import os
 import sys
 import shutil
-import zipfile
 import argparse
 from pathlib import Path
 import yaml
+import zipfile
 from ultralytics import YOLO
 
-CONFIG_PATH = Path("configs/train.yaml")
-BACKUP_DIR = Path("backup")
+if sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 
-def load_config() -> dict:
-    """Loads training configuration from YAML file."""
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+def load_yaml(path: Path) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def normalize_model_name(name: str) -> str:
-    """Normalizes input model names (e.g. 'yolo26n', 'n', 'yolo26n-seg') to 'yolo26n-seg.pt'."""
-    clean = name.lower().strip().replace(".pt", "")
-    if clean.endswith("-seg"):
-        clean = clean[:-4]
-    if clean.startswith("yolo26"):
-        variant = clean.replace("yolo26", "")
-    elif clean in ["n", "s", "m", "l", "x"]:
-        variant = clean
-    else:
-        variant = clean
-    return f"yolo26{variant}-seg.pt"
-
-
-def backup_and_zip_artifacts(project_dir: Path, model_name: str) -> Path:
-    """Backs up checkpoints and training curves, then creates a downloadable zip archive."""
-    dest_dir = BACKUP_DIR / model_name
+def backup_model_run(run_dir: Path, model_name: str, backup_root: Path = Path("backup")):
+    backup_root.mkdir(parents=True, exist_ok=True)
+    dest_dir = backup_root / model_name
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    files_to_backup = [
-        "weights/best.pt",
-        "weights/last.pt",
-        "args.yaml",
-        "results.csv",
-        "results.png",
-    ]
-
-    copied_files = []
-    for item in files_to_backup:
-        src = project_dir / item
+    files_to_copy = ["weights/best.pt", "weights/last.pt", "results.csv", "args.yaml", "results.png"]
+    copied = []
+    for f in files_to_copy:
+        src = run_dir / f
         if src.exists():
-            dst = dest_dir / Path(item).name
+            dst = dest_dir / Path(f).name
             shutil.copy2(src, dst)
-            copied_files.append(dst)
-            print(f"[+] Backed up: {src} -> {dst}")
-        else:
-            print(f"[!] Warning: {src} not found during backup.")
+            copied.append(Path(f).name)
 
-    # Create downloadable zip
-    zip_path = BACKUP_DIR / f"{model_name}_backup.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for f in copied_files:
-            zip_file.write(f, arcname=f.name)
+    print(f" Backed up {copied} of {model_name} to: {dest_dir}")
 
-    print(f"[+] Created standalone backup archive: {zip_path}")
-    return zip_path
-
-
-def run_smoke_test(cfg: dict):
-    """Executes a 1-epoch smoke test on YOLO26m-seg to verify VRAM headroom and segmentation loss."""
-    print("\n" + "=" * 65)
-    print(">>> RUNNING SMOKE TEST: 1 EPOCH WITH YOLO26M-SEG <<<")
-    print("=" * 65)
-
-    model_weight = "yolo26m-seg.pt"
-    model = YOLO(model_weight)
-
-    data_yaml = cfg["data"]
-    model.train(
-        data=data_yaml,
-        epochs=1,
-        imgsz=cfg.get("imgsz", 512),
-        batch=cfg.get("batch", 4),
-        optimizer=cfg.get("optimizer", "AdamW"),
-        lr0=cfg.get("lr0", 0.001),
-        device=cfg.get("device", 0),
-        workers=cfg.get("workers", 2),
-        project="runs/segment",
-        name="smoke_test",
-        exist_ok=True,
-        verbose=True,
-    )
-
-    print("\n[+] Smoke test passed successfully! VRAM comfortably supports batch=4.")
-    print("[+] Safe to proceed with production training.")
-
-
-def train_single_model(cfg: dict, model_weight: str, resume: bool = False):
-    """Trains or resumes a single YOLO26-seg model."""
-    model_name = Path(model_weight).stem
-    run_dir = Path("runs/segment") / model_name
-    last_pt = run_dir / "weights" / "last.pt"
-    backup_last_pt = BACKUP_DIR / model_name / "last.pt"
-
-    print("\n" + "=" * 65)
-    if resume:
-        print(f">>> RESUMING TRAINING: {model_name.upper()} <<<")
-        target_checkpoint = None
-        if last_pt.exists():
-            target_checkpoint = str(last_pt)
-        elif backup_last_pt.exists():
-            target_checkpoint = str(backup_last_pt)
-
-        if not target_checkpoint:
-            raise FileNotFoundError(f"Cannot resume: neither {last_pt} nor {backup_last_pt} exists!")
-
-        print(f"[*] Resuming from checkpoint: {target_checkpoint}")
-        model = YOLO(target_checkpoint)
-        model.train(resume=True)
-    else:
-        print(f">>> STARTING TRAINING: {model_name.upper()} <<<")
-        model = YOLO(model_weight)
-        data_yaml = cfg["data"]
-        model.train(
-            data=data_yaml,
-            epochs=cfg.get("epochs", 30),
-            patience=cfg.get("patience", 30),
-            imgsz=cfg.get("imgsz", 512),
-            batch=cfg.get("batch", 4),
-            optimizer=cfg.get("optimizer", "AdamW"),
-            lr0=cfg.get("lr0", 0.001),
-            weight_decay=cfg.get("weight_decay", 0.0005),
-            seed=cfg.get("seed", 42),
-            deterministic=cfg.get("deterministic", True),
-            amp=cfg.get("amp", True),
-            workers=cfg.get("workers", 2),
-            close_mosaic=cfg.get("close_mosaic", 5),
-            save_period=cfg.get("save_period", 10),
-            device=cfg.get("device", 0),
-            cache=cfg.get("cache", "ram"),
-            project="runs/segment",
-            name=model_name,
-            exist_ok=True,
-            verbose=True,
-        )
-
-    print(f"\n[+] Successfully completed execution for {model_name}!")
-    backup_and_zip_artifacts(run_dir, model_name)
+    # Generate consolidated backup.zip
+    zip_path = Path("backup.zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(backup_root):
+            for file in files:
+                file_path = Path(root) / file
+                arcname = file_path.relative_to(backup_root.parent)
+                zipf.write(file_path, arcname)
+    print(f" Updated consolidated backup archive: {zip_path.resolve()} ({zip_path.stat().st_size / 1024:.1f} KB)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="YOLO26-seg Training Pipeline")
-    parser.add_argument(
-        "--smoke",
-        action="store_true",
-        help="Run a 1-epoch smoke test on YOLO26m-seg to verify VRAM stability",
-    )
+    parser = argparse.ArgumentParser(description="Train YOLO26-seg on Package-Seg 400")
+    parser.add_argument("--smoke-test", action="store_true", help="Run 1-epoch smoke test on YOLO26m-seg to verify VRAM")
     parser.add_argument(
         "--model",
         type=str,
         default="all",
-        help="Model variant to train: yolo26n, yolo26s, yolo26m, or 'all'",
+        choices=["all", "yolo26n", "yolo26s", "yolo26m", "yolo26n-seg", "yolo26s-seg", "yolo26m-seg"],
+        help="Select model variant to train (yolo26n, yolo26s, yolo26m, or all)",
     )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume interrupted training from the latest last.pt checkpoint",
-    )
+    parser.add_argument("--resume", action="store_true", help="Resume training from checkpoint last.pt if interrupted")
+    parser.add_argument("--batch", type=int, default=None, help="Override batch size")
+    parser.add_argument("--epochs", type=int, default=None, help="Override epochs count")
+    parser.add_argument("--device", default=None, help="Device (0 or cpu)")
     args = parser.parse_args()
 
-    cfg = load_config()
+    config_path = Path("configs/train.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError("configs/train.yaml not found!")
 
-    if args.smoke:
-        run_smoke_test(cfg)
+    cfg = load_yaml(config_path)
+
+    if args.batch is not None:
+        cfg["batch"] = args.batch
+    if args.epochs is not None:
+        cfg["epochs"] = args.epochs
+    if args.device is not None:
+        cfg["device"] = args.device
+
+    # 1. Smoke test mode
+    if args.smoke_test:
+        print("\n" + "=" * 60)
+        print(" RUNNING SMOKE TEST: YOLO26m-seg (1 epoch)")
+        print("=" * 60)
+        smoke_model = YOLO("yolo26m-seg.pt")
+        smoke_model.train(
+            data=cfg["data"],
+            epochs=1,
+            imgsz=cfg.get("imgsz", 512),
+            batch=cfg.get("batch", 4),
+            device=cfg.get("device", 0),
+            project="runs/segment",
+            name="smoke_test",
+            exist_ok=True,
+            amp=cfg.get("amp", True),
+            verbose=True,
+        )
+        print("\n SMOKE TEST COMPLETED SUCCESSFULLY! Ready for production training.")
         return
 
-    if args.model.lower() == "all":
-        models = cfg.get("models", ["yolo26n-seg.pt", "yolo26s-seg.pt", "yolo26m-seg.pt"])
-        for m in models:
-            train_single_model(cfg, m, resume=args.resume)
+    # 2. Model selection
+    all_models = [
+        ("yolo26n-seg", "yolo26n-seg.pt"),
+        ("yolo26s-seg", "yolo26s-seg.pt"),
+        ("yolo26m-seg", "yolo26m-seg.pt"),
+    ]
+
+    clean_model_arg = args.model.replace("-seg", "")
+    if args.model != "all":
+        models_to_train = [m for m in all_models if m[0].replace("-seg", "") == clean_model_arg]
     else:
-        target_model = normalize_model_name(args.model)
-        train_single_model(cfg, target_model, resume=args.resume)
+        models_to_train = all_models
+
+    print("\n" + "=" * 60)
+    print(f" TARGET MODELS: {[m[0] for m in models_to_train]}")
+    print(f" CONFIG: epochs={cfg['epochs']}, batch={cfg['batch']}, imgsz={cfg['imgsz']}, optimizer={cfg['optimizer']}")
+    print("=" * 60)
+
+    for tag, weight_name in models_to_train:
+        print(f"\n Training model: {tag}...")
+        run_project = "runs/segment"
+        last_ckpt = Path(run_project) / tag / "weights" / "last.pt"
+
+        if args.resume and last_ckpt.exists():
+            print(f" Resuming interrupted training from: {last_ckpt}")
+            model = YOLO(str(last_ckpt))
+            model.train(resume=True)
+        else:
+            model = YOLO(weight_name)
+            model.train(
+                data=cfg["data"],
+                epochs=cfg["epochs"],
+                patience=cfg.get("patience", 30),
+                imgsz=cfg["imgsz"],
+                batch=cfg["batch"],
+                optimizer=cfg.get("optimizer", "AdamW"),
+                lr0=cfg.get("lr0", 0.001),
+                weight_decay=cfg.get("weight_decay", 0.0005),
+                seed=cfg.get("seed", 42),
+                deterministic=cfg.get("deterministic", True),
+                amp=cfg.get("amp", True),
+                workers=cfg.get("workers", 2),
+                close_mosaic=cfg.get("close_mosaic", 5),
+                cache=cfg.get("cache", "ram"),
+                device=cfg.get("device", 0),
+                project=run_project,
+                name=tag,
+                exist_ok=True,
+            )
+
+        run_dir = Path(run_project) / tag
+        backup_model_run(run_dir, tag)
+
+    print("\n ALL MODELS COMPLETED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":

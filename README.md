@@ -1,95 +1,114 @@
-# YOLO26 Package Instance Segmentation & Counting
+# YOLO26 Package Instance Segmentation & Counting (Package-Seg 400)
 
-A clean, reproducible pipeline for package instance segmentation and automated counting using **YOLO26-seg** (`yolo26n-seg`, `yolo26s-seg`, `yolo26m-seg`) on a standardized **Package-Seg (400-image subset)**.
+A complete pipeline for segmenting and counting packages on the **Package-Seg (400-image subset)** using the **Ultralytics YOLO26-seg** model family (`yolo26n-seg`, `yolo26s-seg`, `yolo26m-seg`).
 
 ---
 
-## 1. Directory Structure
+## 📍 Directory Structure
 
 ```text
 YOLO_object-segmentation/
-├── .gitignore
-├── README.md
-├── requirements.txt
 ├── configs/
-│   └── train.yaml            # Locked training hyperparameters
+│   └── train.yaml          # Locked hyperparameters (AdamW, batch 4, imgsz 512)
+├── datasets/
+│   └── package-seg/        # Package-Seg dataset (400 train / 188 val / 89 test)
+│       ├── data.yaml       # Dataset config
+│       ├── train400.txt    # Relative image paths for locked 400 train split
+│       ├── images/         # train/, val/, test/
+│       └── labels/         # train/, val/, test/
+├── figures/                # Visualizations (dataset_samples.png, demo_counting.png)
+├── metrics/                # CSV outputs from evaluation runs (comparison_test.csv)
+├── report/
+│   └── report.md           # Experiment analysis and performance report
 ├── scripts/
-│   ├── prepare_subset.py     # Download, SHA-256 check, leakage-free 400 subset
-│   ├── check_masks.py        # Validate polygon format and generate GT preview
-│   ├── train.py              # Sequential model training with automated backup
-│   ├── eval_test.py          # Dual split evaluation (val & test) and metric export
-│   └── demo_count.py         # Instance mask package counting demo
+│   ├── download_data.py    # Download archive, filter .rf. leakage, lock 400 subset
+│   ├── check_dataset.py    # Validate split counts and polygon mask integrity
+│   ├── train.py            # Sequential training (n -> s -> m) & auto-backup
+│   ├── eval_test.py        # Benchmark on test set (conf=0.001)
+│   ├── demo_count.py       # Package counting visualization (conf=0.25)
+│   └── upload_kaggle.py    # Cloud backup to Kaggle Dataset
 ├── splits/
-│   └── train400_names.txt    # Tracked list of 400 selected training images
-├── metrics/                  # Benchmark comparison tables (comparison.csv)
-├── figures/                  # GT overlays and demo counting visualizations
-└── report/
-    └── report.md             # Experimental report outline
+│   └── train400_names.txt  # Tracked 400 train image filenames
+├── .gitignore              # Ignores .venv, .env, *.pt, *plan.md
+├── requirements.txt        # Pinned dependencies (ultralytics>=8.4.0)
+└── README.md
 ```
 
 ---
 
-## 2. Initial Setup
+## ⚙️ Initial Setup
 
-### Clone Repository & Create Virtual Environment
+### 1. Environment & Dependencies
+Clone the repository and set up a virtual environment:
+
 ```bash
+# Clone repository
 git clone https://github.com/XiaoSha59/YOLO_object-segmentation.git
 cd YOLO_object-segmentation
 
 # Create and activate virtual environment
 python -m venv .venv
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# Linux / macOS:
-source .venv/bin/activate
 
-# Install dependencies (Ultralytics >= 8.4)
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# On Linux / macOS:
+# source .venv/bin/activate
+
+# Install dependencies
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 ---
 
-## 3. Dataset Preparation
+## 📊 Dataset Setup (Package-Seg 400)
 
-We use the official Ultralytics Package-Seg dataset archive with fixed SHA-256 verification (`62ff29db...`).
+The dataset is partitioned into official fixed splits with an isolated 400-image training subset:
+* **Train (Locked subset)**: 400 images (~1,343 package masks)
+* **Valid**: 188 images
+* **Test**: 89 images
+* **Total**: 677 images
 
+To download, verify SHA-256 integrity, filter `.rf.` synthetic augmentations, and lock the 400-subset:
 ```bash
-# 1. Download official archive, filter duplicate .rf. augmentations, lock 400 subset (seed 42)
-python scripts/prepare_subset.py
-
-# 2. Verify segmentation polygon integrity and generate 16 sample visual overlays
-python scripts/check_masks.py
+python scripts/download_data.py
 ```
-* **Leakage Prevention**: Base images sharing identical sources across synthetic augmentations (`.rf.`) in validation and test splits are strictly excluded from the training split.
-* **Output**: Writes `splits/train400_names.txt` and generates `datasets/package-seg/package400.yaml`.
+
+To verify dataset integrity and generate a 12-sample preview (`figures/dataset_samples.png`):
+```bash
+python scripts/check_dataset.py
+```
 
 ---
 
-## 4. Ultralytics YOLO26 Workflow
+## 🚀 Ultralytics YOLO26 Workflow
 
-All training hyperparameters are configured in `configs/train.yaml` (512x512 resolution, batch size 4, AdamW optimizer, lr0=0.001, seed 42).
+YOLO26-seg provides high-efficiency instance segmentation with multi-scale proto masks and semantic guidance.
 
-### Step 1: Smoke Test
-Verify GPU VRAM stability and confirm segmentation loss components with a 1-epoch test on `yolo26m-seg`:
+### 1. Smoke Test (VRAM & Pipeline Check)
+Run a quick 1-epoch smoke test with `yolo26m-seg` before starting full training:
 ```bash
-python scripts/train.py --smoke
+python scripts/train.py --smoke-test
 ```
 
-### Step 2: Sequential Training
-Train `yolo26n-seg`, `yolo26s-seg`, and `yolo26m-seg` sequentially. Checkpoints and training curves are automatically backed up to `backup/<model_name>/` after each run:
+### 2. Full Training (Sequential $n \rightarrow s \rightarrow m$)
+Train all three models sequentially with locked hyperparameters (`AdamW`, $lr_0=0.001$, `batch=4`, `imgsz=512`, `epochs=30`):
 ```bash
 python scripts/train.py
 ```
+> **Note**: After each model finishes, weights (`best.pt`), training curves, and `results.csv` are automatically archived into `backup/` and compressed to `backup.zip`. You can also train individual models with `python scripts/train.py --model yolo26n`.
 
-### Step 3: Dual-Split Evaluation
-Evaluate all models on both `val` and `test` splits (`conf=0.001`, `imgsz=512`) and export metrics to `metrics/comparison.csv`:
+### 3. Test Set Evaluation
+Evaluate all trained models on the test set (`conf=0.001`):
 ```bash
 python scripts/eval_test.py
 ```
+Outputs precision, recall, Mask mAP50, Mask mAP50-95, and Box metrics to `metrics/comparison_test.csv`.
 
-### Step 4: Package Counting Demo
-Run inference using instance masks (`conf=0.25`, `retina_masks=True`) to segment and count packages on test images:
+### 4. Package Counting Demo
+Run instance mask detection and package counting on test images (`conf=0.25`):
 ```bash
 python scripts/demo_count.py
 ```
-Output visualizations are stored in `figures/demo_counts/`.
+Saves annotated package counts to `figures/demo_counting.png`.

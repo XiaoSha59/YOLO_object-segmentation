@@ -1,112 +1,108 @@
 #!/usr/bin/env python3
 """
 scripts/eval_test.py
-Evaluates best.pt checkpoints of YOLO26-seg models on both validation and test splits (conf=0.001, imgsz=512).
-Computes segmentation and bounding box metrics and exports results to metrics/comparison.csv.
+Evaluates trained YOLO26-seg models on the Package-Seg test split (conf=0.001).
+Computes segmentation and bounding box benchmark metrics and exports to metrics/comparison_test.csv.
 """
 
+import sys
 import os
-import csv
 from pathlib import Path
+import csv
 import yaml
 from ultralytics import YOLO
 
-CONFIG_PATH = Path("configs/train.yaml")
-METRICS_DIR = Path("metrics")
+if sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 
-def load_config() -> dict:
-    """Loads evaluation configuration."""
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+def evaluate_models():
+    data_yaml = "datasets/package-seg/data.yaml"
+    metrics_dir = Path("metrics")
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
+    models = ["yolo26n-seg", "yolo26s-seg", "yolo26m-seg"]
+    rows = []
 
-def find_checkpoint(model_name: str) -> Path:
-    """Finds best.pt checkpoint in runs/ or backup/ directories."""
-    candidates = [
-        Path("runs/segment") / model_name / "weights" / "best.pt",
-        Path("backup") / model_name / "best.pt",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return None
+    print("=" * 65)
+    print(" BENCHMARK EVALUATION ON TEST SET (Package-Seg, conf=0.001)")
+    print("=" * 65)
 
+    for model_tag in models:
+        cand_paths = [
+            Path(f"runs/segment/{model_tag}/weights/best.pt"),
+            Path(f"backup/{model_tag}/best.pt"),
+            Path(f"checkpoints/{model_tag}/best.pt"),
+        ]
+        best_pt = None
+        for p in cand_paths:
+            if p.exists():
+                best_pt = p
+                break
 
-def evaluate_all():
-    """Runs evaluation across all models on val and test splits, exporting a comparison table."""
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    cfg = load_config()
-    data_yaml = cfg["data"]
-    models = cfg.get("models", ["yolo26n-seg.pt", "yolo26s-seg.pt", "yolo26m-seg.pt"])
-    imgsz = cfg.get("imgsz", 512)
-    conf = cfg.get("conf_eval", 0.001)
-
-    results_data = []
-
-    for model_weight in models:
-        model_name = Path(model_weight).stem
-        ckpt_path = find_checkpoint(model_name)
-        if not ckpt_path:
-            print(f"[!] Warning: No checkpoint found for {model_name}, skipping.")
+        if not best_pt:
+            print(f" Checkpoint not found for {model_tag}. Skipping.")
             continue
 
-        size_mb = ckpt_path.stat().st_size / (1024 * 1024)
-        model = YOLO(str(ckpt_path))
+        file_size_mb = best_pt.stat().st_size / (1024 * 1024)
+        print(f"\n Evaluating {model_tag} ({best_pt})...")
+        model = YOLO(str(best_pt))
 
-        for split in ["val", "test"]:
-            print(f"[*] Evaluating {model_name} on {split} split...")
-            metrics = model.val(
-                data=data_yaml,
-                split=split,
-                imgsz=imgsz,
-                conf=conf,
-                device=cfg.get("device", 0),
-                verbose=False,
-            )
+        metrics = model.val(
+            data=data_yaml,
+            split="test",
+            conf=0.001,
+            device=0 if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",
+            project="runs/eval_test",
+            name=model_tag,
+            exist_ok=True,
+            verbose=False,
+        )
 
-            # Segmentation metrics
-            mask_map50 = metrics.seg.map50 if hasattr(metrics, "seg") else 0.0
-            mask_map = metrics.seg.map if hasattr(metrics, "seg") else 0.0
-            mask_p = metrics.seg.mp if hasattr(metrics, "seg") else 0.0
-            mask_r = metrics.seg.mr if hasattr(metrics, "seg") else 0.0
+        # Segmentation metrics
+        mask = metrics.seg if hasattr(metrics, "seg") else None
+        mask_p = float(mask.mp) if mask else 0.0
+        mask_r = float(mask.mr) if mask else 0.0
+        mask_map50 = float(mask.map50) if mask else 0.0
+        mask_map = float(mask.map) if mask else 0.0
 
-            # Box metrics
-            box_map50 = metrics.box.map50 if hasattr(metrics, "box") else 0.0
-            box_map = metrics.box.map if hasattr(metrics, "box") else 0.0
+        # Box metrics
+        box = metrics.box if hasattr(metrics, "box") else None
+        box_map50 = float(box.map50) if box else 0.0
+        box_map = float(box.map) if box else 0.0
 
-            row = {
-                "Model": model_name,
-                "Split": split,
-                "Mask_mAP50": f"{mask_map50:.4f}",
-                "Mask_mAP50_95": f"{mask_map:.4f}",
-                "Mask_P": f"{mask_p:.4f}",
-                "Mask_R": f"{mask_r:.4f}",
-                "Box_mAP50": f"{box_map50:.4f}",
-                "Box_mAP50_95": f"{box_map:.4f}",
-                "Size_MB": f"{size_mb:.2f}",
-            }
-            results_data.append(row)
+        rows.append({
+            "Model": model_tag,
+            "Size (MB)": round(file_size_mb, 2),
+            "Mask_Precision": round(mask_p, 4),
+            "Mask_Recall": round(mask_r, 4),
+            "Mask_mAP50": round(mask_map50, 4),
+            "Mask_mAP50-95": round(mask_map, 4),
+            "Box_mAP50": round(box_map50, 4),
+            "Box_mAP50-95": round(box_map, 4),
+        })
 
-    if not results_data:
-        print("[!] No evaluation metrics collected. Ensure trained checkpoints exist.")
-        return
+    if rows:
+        out_csv = metrics_dir / "comparison_test.csv"
+        headers = list(rows[0].keys())
+        with open(out_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
 
-    csv_path = METRICS_DIR / "comparison.csv"
-    headers = list(results_data[0].keys())
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=headers)
-        writer.writeheader()
-        writer.writerows(results_data)
-
-    print(f"\n[+] Saved evaluation summary to {csv_path}\n")
-
-    # Display Markdown table in stdout
-    print("| " + " | ".join(headers) + " |")
-    print("| " + " | ".join(["---"] * len(headers)) + " |")
-    for r in results_data:
-        print("| " + " | ".join([r[k] for k in headers]) + " |")
+        print("\n" + "=" * 65)
+        print(f" BENCHMARK RESULTS ON TEST SET (Saved to {out_csv}):")
+        print("=" * 65)
+        print("| " + " | ".join(headers) + " |")
+        print("| " + " | ".join(["---"] * len(headers)) + " |")
+        for r in rows:
+            print("| " + " | ".join([str(r[h]) for h in headers]) + " |")
+    else:
+        print(" No model checkpoints found for evaluation.")
 
 
 if __name__ == "__main__":
-    evaluate_all()
+    evaluate_models()
