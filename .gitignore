@@ -13,9 +13,16 @@ kaggle.json
 *kaggle*.json
 
 
-# Plan documentation
+# Plan documentation & Reports
 *plan*.md
 yolo26-package-seg-plan.md
+report/
+*.pdf
+*.tex
+*.aux
+*.log
+*.out
+
 
 
 # Byte-compiled / optimized / DLL files
