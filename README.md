@@ -2,6 +2,9 @@
 
 A complete pipeline for segmenting and counting packages on the **Package-Seg (400-image subset)** using the **Ultralytics YOLO26-seg** model family (`yolo26n-seg`, `yolo26s-seg`, `yolo26m-seg`).
 
+* **Model Documentation**: [Ultralytics YOLO26 Docs](https://docs.ultralytics.com/models/yolo26/) | [Ultralytics Instance Segmentation](https://docs.ultralytics.com/tasks/segment/)
+* **Dataset Sources**: [Package-Seg on Roboflow Universe](https://universe.roboflow.com/roboflow-100/package-seg) | [Ultralytics Official Archive](https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip)
+
 ---
 
 ## 📍 Directory Structure
@@ -64,6 +67,10 @@ pip install -r requirements.txt
 
 ## 📊 Dataset Setup (Package-Seg 400)
 
+The dataset originates from [Package-Seg on Roboflow Universe](https://universe.roboflow.com/roboflow-100/package-seg) and is officially distributed as an archive by Ultralytics:
+* **Direct Archive**: [package-seg.zip](https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip)
+* **Integrity SHA-256**: `62ff29db4b04c2922ebee6879fc5e05de4bd8c8b35b61088337e0b64a68324f6`
+
 The dataset is partitioned into official fixed splits with an isolated 400-image training subset:
 * **Train (Locked subset)**: 400 images (~1,343 package masks)
 * **Valid**: 188 images
@@ -84,7 +91,7 @@ python scripts/check_dataset.py
 
 ## 🚀 Ultralytics YOLO26 Workflow
 
-YOLO26-seg provides high-efficiency instance segmentation with multi-scale proto masks and semantic guidance.
+[Ultralytics YOLO26](https://docs.ultralytics.com/models/yolo26/) introduces multi-scale proto masks and semantic loss guidance for cutting-edge [instance segmentation](https://docs.ultralytics.com/tasks/segment/).
 
 ### 1. Smoke Test (VRAM & Pipeline Check)
 Run a quick 1-epoch smoke test with `yolo26m-seg` before starting full training:
