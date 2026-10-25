@@ -104,8 +104,25 @@ def main():
         "--model",
         type=str,
         default="all",
-        choices=["all", "yolo26n", "yolo26s", "yolo26m", "yolo26n-seg", "yolo26s-seg", "yolo26m-seg"],
-        help="Select model variant to train (yolo26n, yolo26s, yolo26m, or all)",
+        choices=[
+            "all",
+            "yolo26n",
+            "yolo26s",
+            "yolo26m",
+            "yolo26l",
+            "yolo26x",
+            "yolo26n-seg",
+            "yolo26s-seg",
+            "yolo26m-seg",
+            "yolo26l-seg",
+            "yolo26x-seg",
+            "n",
+            "s",
+            "m",
+            "l",
+            "x",
+        ],
+        help="Select model variant to train (yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, or all)",
     )
     parser.add_argument("--resume", action="store_true", help="Resume training from checkpoint last.pt if interrupted")
     parser.add_argument("--batch", type=int, default=None, help="Override batch size")
@@ -157,13 +174,19 @@ def main():
         ("yolo26n-seg", "yolo26n-seg.pt"),
         ("yolo26s-seg", "yolo26s-seg.pt"),
         ("yolo26m-seg", "yolo26m-seg.pt"),
+        ("yolo26l-seg", "yolo26l-seg.pt"),
+        ("yolo26x-seg", "yolo26x-seg.pt"),
     ]
 
     clean_model_arg = args.model.replace("-seg", "")
+    if clean_model_arg in ["n", "s", "m", "l", "x"]:
+        clean_model_arg = f"yolo26{clean_model_arg}"
+
     if args.model != "all":
         models_to_train = [m for m in all_models if m[0].replace("-seg", "") == clean_model_arg]
     else:
         models_to_train = all_models
+
 
     print("\n" + "=" * 60)
     print(f" TARGET MODELS: {[m[0] for m in models_to_train]}")

@@ -42,8 +42,9 @@ def evaluate_models():
     metrics_dir = REPO_ROOT / "metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    models = ["yolo26n-seg", "yolo26s-seg", "yolo26m-seg"]
+    models = ["yolo26n-seg", "yolo26s-seg", "yolo26m-seg", "yolo26l-seg", "yolo26x-seg"]
     rows = []
+
 
     print("=" * 65)
     print(" BENCHMARK EVALUATION ON TEST SET (Package-Seg, conf=0.001)")
