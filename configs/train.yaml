@@ -1,0 +1,27 @@
+# YOLO26 Package-Seg Training Configuration
+data: datasets/package-seg/package400.yaml
+models:
+  - yolo26n-seg.pt
+  - yolo26s-seg.pt
+  - yolo26m-seg.pt
+
+# Training hyperparameters
+epochs: 30
+patience: 30
+imgsz: 512
+batch: 4
+optimizer: AdamW
+lr0: 0.001
+weight_decay: 0.0005
+seed: 42
+deterministic: true
+amp: true
+workers: 2
+close_mosaic: 5
+save_period: 10
+device: 0
+cache: ram
+
+# Evaluation settings
+conf_eval: 0.001
+conf_demo: 0.25
