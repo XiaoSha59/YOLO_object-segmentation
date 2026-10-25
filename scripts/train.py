@@ -22,6 +22,8 @@ if sys.stdout.encoding.lower() != "utf-8":
         pass
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def load_yaml(path: Path) -> dict:
@@ -49,9 +51,13 @@ def ensure_dataset_ready(cfg: dict) -> str:
     print(" [!] Dataset 'data.yaml' not found! Automatically downloading & preparing...")
     print("=" * 65)
 
-    from scripts.download_data import main as run_download
+    try:
+        from scripts.download_data import main as run_download
+    except (ImportError, ModuleNotFoundError):
+        from download_data import main as run_download
 
     run_download()
+
 
     target_yaml = REPO_ROOT / "datasets" / "package-seg" / "data.yaml"
     if target_yaml.exists():

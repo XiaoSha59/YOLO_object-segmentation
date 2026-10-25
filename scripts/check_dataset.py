@@ -19,14 +19,34 @@ if sys.stdout.encoding.lower() != "utf-8":
         pass
 
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+
 def check_dataset() -> bool:
-    data_yaml_path = Path("datasets/package-seg/data.yaml")
+    data_yaml_path = REPO_ROOT / "datasets" / "package-seg" / "data.yaml"
     if not data_yaml_path.exists():
-        print(" Error: datasets/package-seg/data.yaml not found!")
+        data_yaml_path = Path("datasets/package-seg/data.yaml")
+
+    if not data_yaml_path.exists():
+        print(" [!] datasets/package-seg/data.yaml not found! Automatically downloading dataset...")
+        try:
+            from scripts.download_data import main as run_download
+        except (ImportError, ModuleNotFoundError):
+            from download_data import main as run_download
+        run_download()
+
+    if not data_yaml_path.exists():
+        data_yaml_path = REPO_ROOT / "datasets" / "package-seg" / "data.yaml"
+
+    if not data_yaml_path.exists():
+        print(" Error: datasets/package-seg/data.yaml still not found!")
         return False
 
     with open(data_yaml_path, "r", encoding="utf-8") as f:
         data_cfg = yaml.safe_load(f)
+
 
     base_dir = Path("datasets/package-seg")
     splits_names_file = Path("splits/train400_names.txt")
