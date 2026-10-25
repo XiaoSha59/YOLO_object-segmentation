@@ -19,6 +19,8 @@ if sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def main():
     parser = argparse.ArgumentParser(description="Package Counting Demo with YOLO26-seg")
@@ -31,15 +33,17 @@ def main():
     model_path = args.model
     if not model_path:
         for cand in [
-            "backup/yolo26s-seg/best.pt",
-            "runs/segment/yolo26s-seg/weights/best.pt",
-            "backup/yolo26m-seg/best.pt",
-            "runs/segment/yolo26m-seg/weights/best.pt",
-            "backup/yolo26n-seg/best.pt",
-            "runs/segment/yolo26n-seg/weights/best.pt",
+            REPO_ROOT / "backup" / "yolo26s-seg" / "best.pt",
+            REPO_ROOT / "runs" / "segment" / "yolo26s-seg" / "weights" / "best.pt",
+            REPO_ROOT / "backup" / "yolo26m-seg" / "best.pt",
+            REPO_ROOT / "runs" / "segment" / "yolo26m-seg" / "weights" / "best.pt",
+            REPO_ROOT / "backup" / "yolo26n-seg" / "best.pt",
+            REPO_ROOT / "runs" / "segment" / "yolo26n-seg" / "weights" / "best.pt",
+            Path("backup/yolo26s-seg/best.pt"),
+            Path("runs/segment/yolo26s-seg/weights/best.pt"),
         ]:
-            if Path(cand).exists():
-                model_path = cand
+            if cand.exists():
+                model_path = str(cand)
                 break
 
     if not model_path or not Path(model_path).exists():
@@ -49,10 +53,17 @@ def main():
     # Find test image
     image_path = args.image
     if not image_path:
-        test_images = sorted(
-            list(Path("datasets/package-seg/images/test").glob("*.jpg"))
-            + list(Path("datasets/package-seg/images/test").glob("*.png"))
-        )
+        test_dir_candidates = [
+            REPO_ROOT / "datasets" / "package-seg" / "images" / "test",
+            Path("datasets/package-seg/images/test"),
+        ]
+        test_images = []
+        for d in test_dir_candidates:
+            if d.exists():
+                test_images = sorted(list(d.glob("*.jpg")) + list(d.glob("*.png")))
+                if test_images:
+                    break
+
         if not test_images:
             print(" Error: No test images found in datasets/package-seg/images/test!")
             return
@@ -76,7 +87,7 @@ def main():
     annotated_bgr = res.plot(labels=False, boxes=True)
     annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
 
-    output_dir = Path("figures")
+    output_dir = REPO_ROOT / "figures"
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "demo_counting.png"
 

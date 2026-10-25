@@ -18,10 +18,12 @@ import yaml
 
 DATASET_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip"
 EXPECTED_SHA256 = "62ff29db4b04c2922ebee6879fc5e05de4bd8c8b35b61088337e0b64a68324f6"
-DATASETS_DIR = Path("datasets")
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DATASETS_DIR = REPO_ROOT / "datasets"
 TARGET_DIR = DATASETS_DIR / "package-seg"
 ZIP_PATH = DATASETS_DIR / "package-seg.zip"
-SPLITS_DIR = Path("splits")
+SPLITS_DIR = REPO_ROOT / "splits"
 
 
 def compute_sha256(filepath: Path) -> str:
@@ -136,9 +138,10 @@ def select_subset():
         for name in selected_400:
             f.write(f"./images/train/{name}\n")
 
-    # Generate datasets/package-seg/data.yaml
+    # Generate datasets/package-seg/data.yaml with resolved absolute path
+    resolved_path = TARGET_DIR.resolve().as_posix()
     data_yaml = {
-        "path": "datasets/package-seg",
+        "path": resolved_path,
         "train": "train400.txt",
         "val": "images/val",
         "test": "images/test",
@@ -146,6 +149,11 @@ def select_subset():
     }
     yaml_path = TARGET_DIR / "data.yaml"
     with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(data_yaml, f, default_flow_style=False, sort_keys=False)
+
+    # Also save package400.yaml for backwards compatibility
+    compat_yaml = TARGET_DIR / "package400.yaml"
+    with open(compat_yaml, "w", encoding="utf-8") as f:
         yaml.dump(data_yaml, f, default_flow_style=False, sort_keys=False)
 
     print(f"[+] Successfully generated {yaml_path} and {names_txt}")

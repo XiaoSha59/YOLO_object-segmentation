@@ -18,10 +18,25 @@ if sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def get_data_yaml_path() -> str:
+    candidates = [
+        REPO_ROOT / "datasets" / "package-seg" / "data.yaml",
+        Path("datasets/package-seg/data.yaml"),
+        REPO_ROOT / "datasets" / "package-seg" / "package400.yaml",
+        Path("datasets/package-seg/package400.yaml"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c.resolve().as_posix())
+    return "datasets/package-seg/data.yaml"
+
 
 def evaluate_models():
-    data_yaml = "datasets/package-seg/data.yaml"
-    metrics_dir = Path("metrics")
+    data_yaml = get_data_yaml_path()
+    metrics_dir = REPO_ROOT / "metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
     models = ["yolo26n-seg", "yolo26s-seg", "yolo26m-seg"]
@@ -33,9 +48,10 @@ def evaluate_models():
 
     for model_tag in models:
         cand_paths = [
+            REPO_ROOT / "runs" / "segment" / model_tag / "weights" / "best.pt",
             Path(f"runs/segment/{model_tag}/weights/best.pt"),
+            REPO_ROOT / "backup" / model_tag / "best.pt",
             Path(f"backup/{model_tag}/best.pt"),
-            Path(f"checkpoints/{model_tag}/best.pt"),
         ]
         best_pt = None
         for p in cand_paths:
@@ -56,7 +72,7 @@ def evaluate_models():
             split="test",
             conf=0.001,
             device=0 if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",
-            project="runs/eval_test",
+            project=str(REPO_ROOT / "runs" / "eval_test"),
             name=model_tag,
             exist_ok=True,
             verbose=False,

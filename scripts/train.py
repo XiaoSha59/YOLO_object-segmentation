@@ -3,6 +3,7 @@
 scripts/train.py
 Trains YOLO26-seg models (yolo26n-seg, yolo26s-seg, yolo26m-seg) on Package-Seg.
 Provides modular CLI options: --smoke-test, --model, --resume, and automated backup.zip archiving.
+Features self-healing: automatically calls download_data.py if data.yaml is not present.
 """
 
 import os
@@ -20,10 +21,47 @@ if sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def load_yaml(path: Path) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def ensure_dataset_ready(cfg: dict) -> str:
+    """Verifies that dataset data.yaml exists. If not, auto-downloads and prepares it."""
+    raw_path = cfg.get("data", "datasets/package-seg/data.yaml")
+    candidates = [
+        Path(raw_path),
+        REPO_ROOT / raw_path,
+        REPO_ROOT / "datasets" / "package-seg" / "data.yaml",
+        REPO_ROOT / "datasets" / "package-seg" / "package400.yaml",
+        Path("datasets/package-seg/data.yaml"),
+        Path("datasets/package-seg/package400.yaml"),
+    ]
+
+    for cand in candidates:
+        if cand.exists():
+            return str(cand.resolve().as_posix())
+
+    print("\n" + "=" * 65)
+    print(" [!] Dataset 'data.yaml' not found! Automatically downloading & preparing...")
+    print("=" * 65)
+
+    from scripts.download_data import main as run_download
+
+    run_download()
+
+    target_yaml = REPO_ROOT / "datasets" / "package-seg" / "data.yaml"
+    if target_yaml.exists():
+        return str(target_yaml.resolve().as_posix())
+
+    fallback_yaml = Path("datasets/package-seg/data.yaml")
+    if fallback_yaml.exists():
+        return str(fallback_yaml.resolve().as_posix())
+
+    raise FileNotFoundError(f"Could not locate or generate dataset YAML from {raw_path}")
 
 
 def backup_model_run(run_dir: Path, model_name: str, backup_root: Path = Path("backup")):
@@ -69,7 +107,9 @@ def main():
     parser.add_argument("--device", default=None, help="Device (0 or cpu)")
     args = parser.parse_args()
 
-    config_path = Path("configs/train.yaml")
+    config_path = REPO_ROOT / "configs" / "train.yaml"
+    if not config_path.exists():
+        config_path = Path("configs/train.yaml")
     if not config_path.exists():
         raise FileNotFoundError("configs/train.yaml not found!")
 
@@ -82,6 +122,9 @@ def main():
     if args.device is not None:
         cfg["device"] = args.device
 
+    # Ensure dataset is ready (Auto-downloads if missing)
+    data_yaml_path = ensure_dataset_ready(cfg)
+
     # 1. Smoke test mode
     if args.smoke_test:
         print("\n" + "=" * 60)
@@ -89,7 +132,7 @@ def main():
         print("=" * 60)
         smoke_model = YOLO("yolo26m-seg.pt")
         smoke_model.train(
-            data=cfg["data"],
+            data=data_yaml_path,
             epochs=1,
             imgsz=cfg.get("imgsz", 512),
             batch=cfg.get("batch", 4),
@@ -133,7 +176,7 @@ def main():
         else:
             model = YOLO(weight_name)
             model.train(
-                data=cfg["data"],
+                data=data_yaml_path,
                 epochs=cfg["epochs"],
                 patience=cfg.get("patience", 30),
                 imgsz=cfg["imgsz"],
