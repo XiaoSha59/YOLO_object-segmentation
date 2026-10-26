@@ -72,21 +72,28 @@ def extract_dataset():
         return
 
     print(f"[2/3] Extracting archive to {TARGET_DIR}...")
+    TARGET_DIR.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(ZIP_PATH, "r") as zip_ref:
-        zip_ref.extractall(DATASETS_DIR)
+        zip_ref.extractall(TARGET_DIR)
 
-    # Normalize directory if extracted into nested folders
-    if not (TARGET_DIR / "images").exists():
-        for p in DATASETS_DIR.rglob("images"):
-            if p.is_dir() and p != TARGET_DIR / "images":
-                parent = p.parent
-                if parent != TARGET_DIR:
-                    TARGET_DIR.mkdir(parents=True, exist_ok=True)
-                    for item in parent.iterdir():
-                        shm_dest = TARGET_DIR / item.name
-                        if not shm_dest.exists():
-                            shutil.move(str(item), str(shm_dest))
-                break
+    # If the zip extracted into a nested TARGET_DIR / package-seg folder
+    nested_dir = TARGET_DIR / "package-seg"
+    if nested_dir.exists() and (nested_dir / "images").exists():
+        for item in nested_dir.iterdir():
+            dest = TARGET_DIR / item.name
+            if not dest.exists():
+                shutil.move(str(item), str(dest))
+        try:
+            nested_dir.rmdir()
+        except Exception:
+            pass
+
+    # If the zip was extracted into DATASETS_DIR / images
+    for sub in ["images", "labels"]:
+        src_sub = DATASETS_DIR / sub
+        dst_sub = TARGET_DIR / sub
+        if src_sub.exists() and not dst_sub.exists():
+            shutil.move(str(src_sub), str(dst_sub))
 
     for base in ["images", "labels"]:
         valid_dir = TARGET_DIR / base / "valid"
