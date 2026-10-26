@@ -103,32 +103,69 @@ def evaluate_models():
         box_map50 = float(box.map50) if box else 0.0
         box_map = float(box.map) if box else 0.0
 
+        # Calculate parameter count in Millions
+        params_m = 0.0
+        try:
+            params_m = round(sum(p.numel() for p in model.model.parameters()) / 1e6, 1)
+        except Exception:
+            pass
+
         rows.append({
             "Model": model_tag,
-            "Size (MB)": round(file_size_mb, 2),
+            "Params_M": params_m,
+            "Size_MB": round(file_size_mb, 1),
             "Mask_Precision": round(mask_p, 4),
             "Mask_Recall": round(mask_r, 4),
             "Mask_mAP50": round(mask_map50, 4),
-            "Mask_mAP50-95": round(mask_map, 4),
+            "Mask_mAP50_95": round(mask_map, 4),
             "Box_mAP50": round(box_map50, 4),
-            "Box_mAP50-95": round(box_map, 4),
+            "Box_mAP50_95": round(box_map, 4),
+            "Train_Time_s": "",
         })
 
-    if rows:
-        out_csv = metrics_dir / "comparison_test.csv"
-        headers = list(rows[0].keys())
+    out_csv = metrics_dir / "comparison_test.csv"
+    existing_rows = {}
+    if out_csv.exists():
+        try:
+            with open(out_csv, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    existing_rows[r["Model"]] = r
+        except Exception:
+            pass
+
+    for r in rows:
+        m = r["Model"]
+        if m in existing_rows and not r.get("Train_Time_s"):
+            r["Train_Time_s"] = existing_rows[m].get("Train_Time_s", "")
+        existing_rows[m] = r
+
+    if existing_rows:
+        order = ["yolo26n-seg", "yolo26s-seg", "yolo26m-seg", "yolo26l-seg", "yolo26x-seg"]
+        sorted_rows = []
+        for m in order:
+            if m in existing_rows:
+                sorted_rows.append(existing_rows[m])
+        for m, r in existing_rows.items():
+            if m not in order:
+                sorted_rows.append(r)
+
+        headers = [
+            "Model", "Params_M", "Size_MB", "Mask_Precision", "Mask_Recall",
+            "Mask_mAP50", "Mask_mAP50_95", "Box_mAP50", "Box_mAP50_95", "Train_Time_s"
+        ]
         with open(out_csv, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
+            writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(sorted_rows)
 
         print("\n" + "=" * 65)
         print(f" BENCHMARK RESULTS ON TEST SET (Saved to {out_csv}):")
         print("=" * 65)
         print("| " + " | ".join(headers) + " |")
         print("| " + " | ".join(["---"] * len(headers)) + " |")
-        for r in rows:
-            print("| " + " | ".join([str(r[h]) for h in headers]) + " |")
+        for r in sorted_rows:
+            print("| " + " | ".join([str(r.get(h, "")) for h in headers]) + " |")
     else:
         print(" No model checkpoints found for evaluation.")
 
