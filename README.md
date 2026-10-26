@@ -4,9 +4,10 @@ A complete end-to-end computer vision pipeline for pixel-level package instance 
 
 * **Ultralytics Documentation**: [Ultralytics YOLO26](https://docs.ultralytics.com/models/yolo26/) | [Instance Segmentation Task](https://docs.ultralytics.com/tasks/segment/)
 * **Official Dataset Sources**:
-  * [Roboflow Universe: factorypackage/factory_package](https://universe.roboflow.com/factorypackage/factory_package)
+  * [Ultralytics Platform Hub (Interactive Web Viewer)](https://platform.ultralytics.com/ultralytics/datasets/package-seg)
   * [Ultralytics Package-Seg Benchmark Documentation](https://docs.ultralytics.com/datasets/segment/package-seg/)
-  * [Direct Archive (package-seg.zip)](https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip) *(SHA-256: `62ff29db4b04c2922ebee6879fc5e05de4bd8c8b35b61088337e0b64a68324f6`)*
+  * [Official Dataset Config (package-seg.yaml on GitHub)](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/package-seg.yaml)
+  * [Direct Archive Download (package-seg.zip)](https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip) *(SHA-256: `62ff29db4b04c2922ebee6879fc5e05de4bd8c8b35b61088337e0b64a68324f6`)*
 
 ---
 
