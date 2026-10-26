@@ -23,7 +23,7 @@ YOLO_object-segmentation/
 │       ├── train400.txt              # Deterministic list of 400 curated training image paths
 │       ├── images/                   # train/ (400), val/ (188), test/ (89)
 │       └── labels/                   # YOLO polygon mask segmentation labels
-├── figures/                          # Authentic visualizations & benchmark charts
+├── figures/                          # Generated visualizations & charts (Excluded from Git, generated via scripts)
 │   ├── dataset_samples.png           # 12-sample conveyor ground-truth polygon visualization
 │   ├── yolo26_architecture.png       # YOLO26 macro-architecture & dual-head schematic
 │   ├── training_curves.png           # 30-epoch training loss decay & validation metric trajectories

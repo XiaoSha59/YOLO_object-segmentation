@@ -23,6 +23,9 @@ report/
 *.log
 *.out
 
+# Figures and generated visualizations
+figures/
+
 
 
 # Byte-compiled / optimized / DLL files
