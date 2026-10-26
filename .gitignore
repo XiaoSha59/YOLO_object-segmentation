@@ -37,6 +37,8 @@ datasets/
 *.zip
 *.tar.gz
 backup/
+kaggle_meta/
+kaggle_outputs/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

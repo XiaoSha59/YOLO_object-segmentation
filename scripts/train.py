@@ -144,6 +144,14 @@ def main():
         cfg["epochs"] = args.epochs
     if args.device is not None:
         cfg["device"] = args.device
+    else:
+        import torch
+        if torch.cuda.is_available():
+            cfg["device"] = 0
+        else:
+            print("[!] CUDA not detected. Falling back to device='cpu'")
+            cfg["device"] = "cpu"
+            cfg["amp"] = False
 
     # Ensure dataset is ready (Auto-downloads if missing)
     data_yaml_path = ensure_dataset_ready(cfg)
