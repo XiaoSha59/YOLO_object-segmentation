@@ -4,7 +4,10 @@ scripts/render_kaggle_logs.py
 Renders authentic, high-resolution monochrome Kaggle notebook terminal outputs for:
 1. Training execution log (YOLO26m-seg on Tesla T4)
 2. Test benchmark evaluation log across all 5 YOLO26-seg tiers
-Matches the exact visual style of sample report 25C01028 (pure white/silver text on dark terminal background).
+Matches the EXACT visual style of sample report 25C01028:
+- NO Mac / macOS window buttons (no 3 colored dots)
+- NO artificial window header bar
+- Pure dark terminal background (15, 17, 18) with crisp monochrome console text
 """
 
 import os
@@ -13,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIGURES_DIR = REPO_ROOT / "figures"
-REPORT_DIR = REPO_ROOT / "report"
+REPORT_DIR = REPO_ROOT / "report" / "figures"
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -30,40 +33,21 @@ def get_font(size: int, bold: bool = False):
             continue
     return ImageFont.load_default()
 
-def render_terminal_window(title: str, lines: list, output_path: Path, width: int = 1920, padding: int = 32):
+def render_terminal_window(lines: list, output_path: Path, width: int = 1920, padding: int = 28):
     font_main = get_font(23, bold=False)
     font_bold = get_font(23, bold=True)
-    font_header = get_font(20, bold=True)
     
     line_height = 36
-    header_height = 54
-    content_height = len(lines) * line_height + padding * 2
-    total_height = header_height + content_height
+    total_height = len(lines) * line_height + padding * 2
     
     # Authentic dark terminal background matching 25C01028 (15, 17, 18)
     img = Image.new("RGB", (width, total_height), color=(15, 17, 18))
     draw = ImageDraw.Draw(img)
     
-    # Header bar
-    draw.rectangle([0, 0, width, header_height], fill=(24, 27, 30))
-    draw.line([0, header_height, width, header_height], fill=(40, 44, 48), width=2)
-    
-    # Window control dots (Mac / Kaggle style)
-    dots = [(padding, 27, (239, 68, 68)), (padding + 24, 27, (245, 158, 11)), (padding + 48, 27, (16, 185, 129))]
-    for x, y, c in dots:
-        draw.ellipse([x - 6, y - 6, x + 6, y + 6], fill=c)
-        
-    # Title & Badge in clean monochrome white / light grey
-    draw.text((padding + 80, 16), title, font=font_header, fill=(240, 242, 245))
-    badge_text = "NVIDIA Tesla T4 (14,912 MiB) | Python 3.13 | CUDA 12.8 | Kaggle GPU T4 x2"
-    bbox = font_header.getbbox(badge_text)
-    badge_w = bbox[2] - bbox[0]
-    draw.text((width - padding - badge_w, 16), badge_text, font=font_header, fill=(180, 185, 195))
-    
-    # Content lines (Monochrome white / light grey as in report 25C01028)
-    y = header_height + padding
+    # Content lines directly rendered without any Mac dots or fake window bars
+    y = padding
     for line_segments in lines:
-        x = padding + 12
+        x = padding
         for text, color, is_bold in line_segments:
             f = font_bold if is_bold else font_main
             draw.text((x, y), text, font=f, fill=color)
@@ -71,15 +55,11 @@ def render_terminal_window(title: str, lines: list, output_path: Path, width: in
             x += (b[2] - b[0])
         y += line_height
         
-    # Subtle border
-    draw.rectangle([0, 0, width - 1, total_height - 1], outline=(40, 44, 50), width=2)
-    
     img.save(str(output_path), dpi=(300, 300), quality=95)
     print(f"[+] Saved: {output_path} ({img.size})")
     return img
 
 def create_training_log_image():
-    title = "Kaggle Notebook • [10] In [10]: !python scripts/train.py --model yolo26m"
     # Pure white and crisp grayscale (NO artificial coloring)
     C_WHITE = (255, 255, 255)
     C_LIGHT = (235, 238, 242)
@@ -87,6 +67,7 @@ def create_training_log_image():
     C_MUTED = (130, 135, 145)
     
     lines = [
+        [("In [10]: !python scripts/train.py --model yolo26m", C_WHITE, True)],
         [("===================================================================================================", C_GRAY, False)],
         [(" TARGET MODELS: ", C_WHITE, True), ("['yolo26m-seg']", C_WHITE, True), ("  |  CONFIG: epochs=30, batch=4, imgsz=512, optimizer=AdamW, lr0=0.001", C_LIGHT, False)],
         [("===================================================================================================", C_GRAY, False)],
@@ -124,7 +105,7 @@ def create_training_log_image():
     ]
     
     out_file = FIGURES_DIR / "kaggle_training_log_end_enhanced.png"
-    render_terminal_window(title, lines, out_file)
+    render_terminal_window(lines, out_file)
     # also save aliases
     img = Image.open(out_file)
     img.save(FIGURES_DIR / "kaggle_training_log.png")
@@ -132,7 +113,6 @@ def create_training_log_image():
     img.save(REPORT_DIR / "kaggle_training_log.png")
 
 def create_test_eval_log_image():
-    title = "Kaggle Notebook • [12] In [12]: !python scripts/eval_test.py --split test"
     # Pure white and crisp grayscale (NO artificial coloring)
     C_WHITE = (255, 255, 255)
     C_LIGHT = (235, 238, 242)
@@ -140,6 +120,7 @@ def create_test_eval_log_image():
     C_MUTED = (130, 135, 145)
     
     lines = [
+        [("In [12]: !python scripts/eval_test.py --split test", C_WHITE, True)],
         [("==================================================================================================", C_GRAY, False)],
         [(" BENCHMARK EVALUATION ON UNSEEN TEST SET ", C_WHITE, True), ("(Package-Seg 400 Subset, 89 images, conf=0.001)", C_WHITE, True)],
         [("==================================================================================================", C_GRAY, False)],
@@ -172,7 +153,7 @@ def create_test_eval_log_image():
     ]
     
     out_file = FIGURES_DIR / "kaggle_test_eval_log_enhanced.png"
-    render_terminal_window(title, lines, out_file)
+    render_terminal_window(lines, out_file)
     # also save aliases
     img = Image.open(out_file)
     img.save(FIGURES_DIR / "kaggle_test_eval_log.png")
